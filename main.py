@@ -345,9 +345,17 @@ else:
     )
     _base.fit(X_train, y_train, sample_weight=sample_weights)
 
-    # Calibrate probabilities so breach_risk_% is a true probability estimate
-    model = CalibratedClassifierCV(_base, cv="prefit", method="isotonic")
-    model.fit(X_test, y_test)
+    # Calibrate probabilities using cross-validation on training data.
+    # cv="prefit" was removed in scikit-learn ≥1.4 — use cv=5 on training data instead.
+    # _base is kept separately so feature_importances_ remains accessible for charts.
+    model = CalibratedClassifierCV(
+        GradientBoostingClassifier(
+            n_estimators=300, learning_rate=0.08,
+            max_depth=4, subsample=0.85, random_state=42
+        ),
+        cv=5, method="isotonic"
+    )
+    model.fit(X_train, y_train, sample_weight=sample_weights)
 
     y_pred      = model.predict(X_test)
     y_pred_prob = model.predict_proba(X_test)[:, 1]
