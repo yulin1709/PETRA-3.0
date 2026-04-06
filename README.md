@@ -297,3 +297,117 @@ PETRA automatically picks the latest dated incident file — you do not need to 
 
 Built by the Petronas Trading Digital Service Management team.
 For questions about the code, contact the team lead or refer to the inline comments in each script.
+
+
+---
+
+## Sharing the Dashboard & Deployment Options
+
+The dashboard is a single `.html` file. It contains all the data baked in — no server, no database, no login needed. Here are your options from simplest to most powerful.
+
+---
+
+### Option 1 — Share the HTML file directly (simplest, zero setup)
+
+After running `main.py`, send the file `PETRA_Dashboard_YYYY-MM-DD.html` to anyone on the team via Teams, email, or SharePoint. They open it in any browser — Chrome, Edge, Firefox. No installation required.
+
+Limitation: they need to receive a new file each day.
+
+---
+
+### Option 2 — Put it on SharePoint (recommended for Petronas)
+
+1. Upload `PETRA_Dashboard_YYYY-MM-DD.html` to a SharePoint document library
+2. Right-click → Share → copy the link
+3. Anyone with the link can open it in their browser
+
+To make it always show the latest version, save the file with a fixed name instead of a date:
+
+Open `dashboard.py` and change this line:
+```python
+out_path = OUT_DIR / f"PETRA_Dashboard_{datetime.now().strftime('%Y-%m-%d')}.html"
+```
+to:
+```python
+out_path = OUT_DIR / "PETRA_Dashboard_Latest.html"
+```
+
+Then set up a scheduled task (see below) to run `main.py` every morning. The SharePoint link stays the same — it always shows today's data.
+
+---
+
+### Option 3 — Host on GitHub Pages (free public website)
+
+This turns the dashboard into a real website anyone can visit with a URL like `https://yulin1709.github.io/PETRA-3.0/`.
+
+**Steps:**
+
+1. After running `main.py`, copy the generated HTML file into your repo and rename it `index.html`:
+   ```
+   copy "C:\Users\yulin.yeap\OneDrive - PETRONAS\Desktop\PETRA Output\PETRA_Dashboard_Latest.html" index.html
+   ```
+
+2. Commit and push:
+   ```
+   git add index.html
+   git commit -m "Update dashboard"
+   git push
+   ```
+
+3. In your GitHub repo, go to **Settings → Pages → Source → Deploy from branch → main → / (root) → Save**
+
+4. After a minute, your dashboard is live at `https://yulin1709.github.io/PETRA-3.0/`
+
+**Important:** GitHub Pages is public. Do not use this if your ticket data is confidential. Use SharePoint instead for internal Petronas use.
+
+---
+
+### Option 4 — Deploy as a private web app on Azure Static Web Apps (most professional)
+
+This gives you a private URL that only Petronas staff with a Microsoft account can access.
+
+1. In the Azure Portal, create a **Static Web App** resource
+2. Connect it to your GitHub repo (`yulin1709/PETRA-3.0`)
+3. Set the build output to `/` (root)
+4. Enable **Azure Active Directory** authentication in the Static Web App settings
+5. Push `index.html` to the repo — Azure auto-deploys it
+
+Result: a URL like `https://your-app.azurestaticapps.net` that requires Petronas Microsoft login. Only people in your tenant can access it.
+
+Cost: Free tier is sufficient for this use case.
+
+---
+
+### Option 5 — Run as a scheduled task (fully automated daily refresh)
+
+Set up Windows Task Scheduler to run PETRA every morning at 8:00 AM automatically.
+
+1. Open **Task Scheduler** → Create Basic Task
+2. Name: `PETRA Daily Run`
+3. Trigger: Daily at 08:00
+4. Action: Start a program
+   - Program: `C:\Users\yulin.yeap\AppData\Local\Programs\Python\Python314\python.exe`
+   - Arguments: `main.py`
+   - Start in: `C:\Users\yulin.yeap\OneDrive - PETRONAS\Desktop\VSC Projects\PETRA`
+5. Finish
+
+Each morning PETRA runs automatically, generates fresh reports, and overwrites `PETRA_Dashboard_Latest.html`. If you've set up SharePoint or GitHub Pages, the team sees updated data without anyone doing anything manually.
+
+---
+
+### Dashboard Features (v3.0)
+
+| Feature | How to use |
+|---|---|
+| Date filter | Set From/To dates to see only tickets reported in that range |
+| Team filter | Select a team to see only their tickets across all tabs |
+| Assignee filter | Filter to a specific person's tickets |
+| Severity filter | Show only S1, S2, S3, or S4 tickets |
+| Category filter | Filter to a specific issue type |
+| Reset button | Clears all filters instantly |
+| Column sort | Click any column header to sort ascending/descending |
+| Search box | Type anything to search within the visible table |
+| ⬇ CSV button | Downloads the current filtered view as a CSV file (opens in Excel) |
+| Predicted Breach column | Shows the estimated date/time the ticket will breach its SLA |
+| Zombie tab | Lists tickets open more than 2× their SLA target |
+| KPI cards | Update dynamically when filters are applied |
