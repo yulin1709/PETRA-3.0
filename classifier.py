@@ -213,7 +213,7 @@ CATS = [
     "Discrepancies - Bank Account Issue", "Discrepancies - Details", "Discrepancies - Counterparty",
     "Discrepancies - Freight", "Discrepancies - Bunker", "run corrective", "Missing Data",
     "Duplicate Invoice/Deal Number", "SAP Posting Failures", "Others", "Question Help Support",
-    "Not Update Data", "Push to SAP", "Wrong Price", "Wrong Quantity",
+    "Not Update Data", "Push to SAP", "Push Document", "Wrong Price", "Wrong Quantity",
     "System Error / Functional Issue", "Report Issue", "Access Issue",
     "PLSB Bucket Amendment", "Matching Issue", "New Setup / Configuration",
 ]
@@ -263,24 +263,36 @@ PATTERNS: Dict[str, List[Tuple[str, int, str]]] = {
         (r"\bduplicates?\s*(item|items?|line)\s*(in\s*endur|endur\s*system|system)\b", 11, "duplicates item in endur"),
     ],
 
-    "Push to SAP": [
-        (r"\b" + VERBS_PUSH + r"\b.{0,40}\b" + JE_NE_SAP + r"\b", 12, "push to NE/JE/SAP"),
-        (r"\bhelp\s*to\s*push\b", 10, "help to push"),
-        (r"\bpush.{0,20}\btab\b", 8, "push tab"),
-        (r"\bpush\s*doc(ument)?\s*(no|number)?\s*\d+", 11, "push doc number"),
+    "Push Document": [
+        # Pushing documents to JE (Journal Entries) or NE (New Entries) tabs
+        # These are document staging actions — NOT direct SAP posting
+        (r"\b" + VERBS_PUSH + r"\b.{0,40}\b(ne|new\s*entries|je|journal\s*entries?)(\s*tab)?\b", 12, "push to NE/JE tab"),
         (r"\bpush.{0,20}\bne\b|\bne.{0,20}\bpush\b|\bpush.{0,20}\bje\b|\bje.{0,20}\bpush\b", 11, "push NE/JE"),
         (r"\binto\s*(ne|je|new\s*entries|journal\s*entries)\s*tab\b", 11, "push into NE/JE tab"),
+        (r"\bpush\s*(into|to)\s*(ne|je|new\s*entries|journal\s*entries)\b", 11, "push into NE/JE explicit"),
+        (r"\bpush\s*(doc\s*)?(no\s*)?\d+\s*to\s*(ne|je|new\s*entries)\b", 13, "push doc to NE/JE"),
+        (r"\bpush\s*doc(ument)?\s*(no|number)?\s*\d+", 11, "push doc number"),
         (r"\bpush\s*doc\b", 11, "push doc"),
         (r"\bpush\s*to\s*drafted\b", 11, "push to drafted"),
-        (r"\bpush\s*(into|to)\s*(ne|je|new\s*entries|journal\s*entries)\b", 11, "push into NE/JE explicit"),
+        (r"\bhelp\s*to\s*push\b", 10, "help to push"),
         (r"\bplease\s*(help\s*to\s*)?push\b", 10, "please push"),
-        (r"\bpush\s*(doc\s*)?(no\s*)?\d+\s*to\s*(ne|je|sap|new\s*entries)\b", 13, "push doc to NE/JE/SAP"),
+        (r"\bpush.{0,20}\btab\b", 8, "push tab"),
         (r"\burgently?.{0,20}\bpush\b|\bpush\b.{0,20}\burgently?\b", 10, "urgently push"),
         (r"\bnot\s*(appear|populate)\b.{0,30}\b(ne|new\s*entries)\b", 8, "not appear in NE"),
         (r"\b(ne|new\s*entries)\b.{0,30}\bnot\s*(appear|populate)\b", 8, "NE not appear"),
         (r"\bpull\s*back\b.{0,20}\b(ne|new\s*entries|doc|document)\b", 10, "pull back to NE"),
         (r"\btransfer\s*doc\b.{0,30}\b(ne|from|month|november|december|january)\b", 9, "transfer doc NE month"),
         (r"\bmove\s*doc\b.{0,30}\b(ne|month|status)\b", 9, "move doc NE"),
+    ],
+
+    "Push to SAP": [
+        # Pushing directly to SAP — the actual SAP system posting action
+        (r"\bpush\s*(doc\s*)?(no\s*)?\d+\s*to\s*sap\b", 13, "push doc to SAP explicitly"),
+        (r"\b" + VERBS_PUSH + r"\b.{0,40}\bsap\b", 12, "push to SAP keyword"),
+        (r"\bkindly\s*(help\s*to\s*)?push\b.{0,30}\bsap\b", 11, "kindly push to SAP"),
+        (r"\bplease\s*(help\s*to\s*)?push\b.{0,30}\bsap\b", 11, "please push to SAP"),
+        (r"\bpush\s*to\s*sap\b", 13, "push to SAP direct"),
+        (r"\bsend\s*to\s*sap\b|\btrigger\s*to\s*sap\b|\bre.?push\s*to\s*sap\b", 12, "send/trigger/repush to SAP"),
     ],
 
     "SAP Posting Failures": [
@@ -737,7 +749,8 @@ _FB_PATTERNS = [
     (re.compile(SYSTEM_ERROR_PHRASES, re.IGNORECASE),   "System Error / Functional Issue",   3),
     (re.compile(r"\b(match|matching|actuali[sz])\b", re.IGNORECASE), "Matching Issue",       3),
     (re.compile(r"\b(report|pnl|p&l|var|eod)\b", re.IGNORECASE),     "Report Issue",        3),
-    (re.compile(r"\b(push|ne\s*tab|new\s*entries)\b", re.IGNORECASE), "Push to SAP",         3),
+    (re.compile(r"\b(push|ne\s*tab|new\s*entries|je\s*tab|journal\s*entries)\b", re.IGNORECASE), "Push Document", 3),
+    (re.compile(r"\bpush\s*to\s*sap\b|\bsend\s*to\s*sap\b", re.IGNORECASE), "Push to SAP", 4),
     (re.compile(r"\b(duplicate|double)\s*(line\s*item|line\s*items|barging|product\s*cost)\b", re.IGNORECASE), "run corrective", 4),
     (re.compile(r"\bi[/\\]o\b.{0,20}\b(barging|cargo|product|cost)\b", re.IGNORECASE), "run corrective", 4),
     (re.compile(DEAL_DUP_SIGNALS, re.IGNORECASE),       "Duplicate Invoice/Deal Number",     5),
@@ -768,7 +781,7 @@ _INFER_PATTERNS = [
 ]
 
 PRIORITY = [
-    "run corrective", "Push to SAP", "SAP Posting Failures", "Duplicate Invoice/Deal Number",
+    "run corrective", "Push Document", "Push to SAP", "SAP Posting Failures", "Duplicate Invoice/Deal Number",
     "PLSB Bucket Amendment", "Matching Issue",
     "Not Update Data", "Missing Data", "Wrong Price", "Wrong Quantity",
     "Discrepancies - Amount", "Discrepancies - exchange rate", "Discrepancies - Date",
