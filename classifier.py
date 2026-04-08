@@ -51,7 +51,12 @@ else:
     if INCIDENT_ROOT is None:
         INCIDENT_ROOT = Path(os.environ["USERPROFILE"]) / r"PETRONAS\TRMS Internal - myGenie+ Extract"
 
-OUT_DIR = Path(os.environ["USERPROFILE"]) / "OneDrive - PETRONAS" / "Desktop" / "PETRA OUTPUT"
+OUT_DIR = (
+    Path(os.environ["USERPROFILE"])
+    / "PETRONAS"
+    / "PETCO Trading Digital - myGenie Ticket Analysis"
+    / "Ticket Categorization"
+)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_FILE = OUT_DIR / "Classified_Incidents.xlsx"
 
