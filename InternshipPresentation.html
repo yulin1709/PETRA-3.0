@@ -1,0 +1,180 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Internship Presentation — Yeap Yu Lin</title>
+<style>
+/* ── Reset & Base ── */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#07111F;--card:#0D1B2A;--card2:#112236;
+  --teal:#00A19C;--teal2:#00CFC8;
+  --orange:#F97316;--red:#EF4444;--gold:#F59E0B;--green:#22C55E;
+  --blue:#3B82F6;--purple:#8B5CF6;
+  --text:#CBD5E1;--bright:#F1F5F9;--muted:#64748B;
+  --border:rgba(0,161,156,.18);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
+  font-family:'Segoe UI',system-ui,sans-serif;color:var(--text)}
+
+/* ── Slide container ── */
+.deck{width:100vw;height:100vh;position:relative}
+.slide{position:absolute;inset:0;display:none;flex-direction:column;
+  padding:52px 64px;overflow:hidden}
+.slide.active{display:flex}
+
+/* ── Navigation ── */
+.nav-bar{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:16px;z-index:999;
+  background:rgba(13,27,42,.85);backdrop-filter:blur(12px);
+  border:1px solid var(--border);border-radius:40px;padding:10px 24px}
+.nav-bar button{background:none;border:none;color:var(--muted);cursor:pointer;
+  font-size:18px;transition:color .2s;padding:4px 8px}
+.nav-bar button:hover{color:var(--teal)}
+#slide-counter{font-size:12px;color:var(--muted);min-width:60px;text-align:center}
+.dot-row{display:flex;gap:6px;align-items:center}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--muted);
+  cursor:pointer;transition:all .2s}
+.dot.active{background:var(--teal);width:18px;border-radius:3px}
+
+/* ── Section label ── */
+.section-tag{display:inline-flex;align-items:center;gap:8px;
+  background:rgba(0,161,156,.12);border:1px solid rgba(0,161,156,.3);
+  border-radius:20px;padding:5px 14px;font-size:11px;font-weight:700;
+  color:var(--teal);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:18px}
+
+/* ── Typography ── */
+.slide-title{font-size:42px;font-weight:800;color:var(--bright);line-height:1.15;margin-bottom:10px}
+.slide-title span{color:var(--teal)}
+.slide-sub{font-size:16px;color:var(--muted);margin-bottom:32px;max-width:700px}
+h3{font-size:15px;font-weight:700;color:var(--bright);margin-bottom:8px}
+p,li{font-size:13px;line-height:1.7;color:var(--text)}
+
+/* ── Cards ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px 24px}
+.card.teal{border-left:4px solid var(--teal)}
+.card.orange{border-left:4px solid var(--orange)}
+.card.red{border-left:4px solid var(--red)}
+.card.gold{border-left:4px solid var(--gold)}
+.card.green{border-left:4px solid var(--green)}
+.card.purple{border-left:4px solid var(--purple)}
+.card.blue{border-left:4px solid var(--blue)}
+
+/* ── Grid helpers ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.gcol{display:flex;flex-direction:column;gap:16px}
+
+/* ── Stat big ── */
+.stat{text-align:center;padding:20px 16px}
+.stat .num{font-size:44px;font-weight:800;color:var(--teal);line-height:1}
+.stat .num.orange{color:var(--orange)}
+.stat .num.red{color:var(--red)}
+.stat .num.green{color:var(--green)}
+.stat .num.gold{color:var(--gold)}
+.stat .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-top:6px}
+.stat .sub{font-size:12px;color:var(--text);margin-top:4px}
+
+/* ── Flow / Arrow ── */
+.flow{display:flex;align-items:center;gap:0}
+.flow-box{background:var(--card2);border:1px solid var(--border);border-radius:12px;
+  padding:14px 18px;text-align:center;flex:1}
+.flow-box .icon{font-size:24px;margin-bottom:6px}
+.flow-box .label{font-size:12px;font-weight:700;color:var(--bright)}
+.flow-box .sub{font-size:10px;color:var(--muted);margin-top:3px}
+.arrow{font-size:20px;color:var(--teal);padding:0 8px;flex-shrink:0}
+
+/* ── Before/After ── */
+.ba-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.ba-col{border-radius:16px;padding:24px}
+.ba-col.before{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2)}
+.ba-col.after{background:rgba(0,161,156,.07);border:1px solid rgba(0,161,156,.2)}
+.ba-col h3{font-size:13px;font-weight:700;margin-bottom:14px}
+.ba-col.before h3{color:var(--red)}
+.ba-col.after h3{color:var(--teal)}
+.ba-item{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;font-size:12px}
+.ba-icon{font-size:14px;flex-shrink:0;margin-top:1px}
+
+/* ── Tech pill ── */
+.tech-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.tech{background:rgba(0,161,156,.1);border:1px solid rgba(0,161,156,.25);
+  border-radius:20px;padding:4px 12px;font-size:11px;font-weight:600;color:var(--teal)}
+.tech.py{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:#93C5FD}
+.tech.bi{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3);color:#FCD34D}
+.tech.sk{background:rgba(139,92,246,.1);border-color:rgba(139,92,246,.3);color:#C4B5FD}
+.tech.xl{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#86EFAC}
+
+/* ── Impact bar ── */
+.impact-bar{margin-bottom:12px}
+.impact-bar .label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}
+.impact-bar .label span:first-child{color:var(--text)}
+.impact-bar .label span:last-child{color:var(--teal);font-weight:700}
+.bar-track{background:rgba(255,255,255,.06);border-radius:4px;height:8px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--teal),var(--teal2));
+  transition:width 1s ease}
+
+/* ── Timeline ── */
+.timeline{display:flex;flex-direction:column;gap:0}
+.tl-item{display:flex;gap:16px;padding-bottom:18px;position:relative}
+.tl-item:not(:last-child)::before{content:'';position:absolute;left:15px;top:32px;
+  bottom:0;width:2px;background:var(--border)}
+.tl-dot{width:32px;height:32px;border-radius:50%;background:var(--card2);
+  border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;
+  font-size:14px;flex-shrink:0;z-index:1}
+.tl-content{padding-top:4px}
+.tl-content h4{font-size:13px;font-weight:700;color:var(--bright);margin-bottom:3px}
+.tl-content p{font-size:12px;color:var(--muted)}
+
+/* ── Cover slide ── */
+.cover-bg{position:absolute;inset:0;overflow:hidden;z-index:0}
+.cover-bg svg{position:absolute;inset:0;width:100%;height:100%}
+.cover-content{position:relative;z-index:1;display:flex;flex-direction:column;
+  justify-content:center;height:100%}
+.cover-eyebrow{font-size:12px;letter-spacing:3px;text-transform:uppercase;
+  color:var(--teal);margin-bottom:20px;font-weight:600}
+.cover-title{font-size:62px;font-weight:900;color:var(--bright);line-height:1.05;margin-bottom:16px}
+.cover-title span{color:var(--teal)}
+.cover-sub{font-size:18px;color:var(--muted);margin-bottom:40px;max-width:600px}
+.cover-meta{display:flex;gap:24px;flex-wrap:wrap}
+.cover-meta-item{font-size:13px;color:var(--muted)}
+.cover-meta-item strong{color:var(--bright);display:block;font-size:15px}
+
+/* ── Divider slide ── */
+.divider-slide{background:linear-gradient(135deg,#07111F 0%,#0D2035 100%);
+  justify-content:center;align-items:center;text-align:center}
+.divider-num{font-size:120px;font-weight:900;color:rgba(0,161,156,.08);
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);line-height:1}
+.divider-content{position:relative;z-index:1}
+.divider-tag{font-size:11px;letter-spacing:3px;text-transform:uppercase;
+  color:var(--teal);margin-bottom:16px;font-weight:700}
+.divider-title{font-size:52px;font-weight:900;color:var(--bright);margin-bottom:12px}
+.divider-sub{font-size:16px;color:var(--muted);max-width:500px;margin:0 auto}
+
+/* ── Accent line ── */
+.accent-line{width:48px;height:4px;background:var(--teal);border-radius:2px;margin-bottom:20px}
+
+/* ── Quote ── */
+.quote{border-left:3px solid var(--teal);padding:12px 20px;
+  background:rgba(0,161,156,.06);border-radius:0 12px 12px 0;
+  font-size:14px;color:var(--bright);font-style:italic;margin:16px 0}
+
+/* ── Highlight box ── */
+.highlight{background:linear-gradient(135deg,rgba(0,161,156,.15),rgba(0,207,200,.08));
+  border:1px solid rgba(0,161,156,.3);border-radius:12px;padding:16px 20px}
+
+/* ── Two-col layout ── */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:32px;flex:1}
+.split.wide{grid-template-columns:1.4fr 1fr}
+.split.narrow{grid-template-columns:1fr 1.4fr}
+
+/* ── Scrollable content ── */
+.scroll-content{overflow-y:auto;flex:1}
+.scroll-content::-webkit-scrollbar{width:4px}
+.scroll-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
