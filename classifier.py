@@ -971,3 +971,7 @@ def run_classifier() -> Path:
 
     print(f"\n  Classification complete -> {OUTPUT_FILE}")
     return OUTPUT_FILE
+
+
+if __name__ == "__main__":
+    run_classifier()
