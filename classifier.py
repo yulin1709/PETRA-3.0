@@ -734,12 +734,12 @@ PATTERNS: Dict[str, List[Tuple[str, int, str]]] = {
 # ============================================================
 # Non-technical users edit Classifier_Keywords.xlsx — no code needed.
 #
-# Pattern column uses plain readable phrases:
+# Pattern column — just type plain words:
 #
-#   Single phrase     →  wrong price
-#   Either/or (|)     →  wrong price | incorrect price
-#   Both words (+)    →  wrong + price        (both must appear near each other)
-#   Exact phrase      →  "strike price"       (quote for exact multi-word match)
+#   Single phrase     :  not found
+#   Either/or         :  wrong price | incorrect price
+#   Both words nearby :  wrong + price
+#   Exact phrase      :  "strike price"
 #
 # Score guide:  12-15 = very strong match
 #               9-11  = strong match
@@ -754,18 +754,21 @@ KEYWORDS_FILE = OUT_DIR / "Classifier_Keywords.xlsx"
 
 def _regex_from_readable(raw: str) -> str:
     """
-    Convert a plain-English pattern phrase into a regex string.
+    Convert a plain-English phrase into a regex string.
+    Users just type natural words — no regex knowledge needed.
 
-    Supported formats (case-insensitive, all converted to regex):
-      wrong price              → \bwrong\s+price\b
-      wrong price | bad price  → (\bwrong\s+price\b|\bbad\s+price\b)
-      wrong + price            → \bwrong\b.{0,60}\bprice\b  (proximity AND)
-      "strike price"           → \bstrike\s+price\b  (exact phrase)
+    Supported formats:
+      not found                → matches "not found" as whole words
+      wrong price | bad price  → matches either phrase (OR)
+      wrong + price            → both words must appear within 60 chars (AND)
+      "strike price"           → exact phrase match
     """
     raw = raw.strip()
+    if not raw:
+        return r"\b\w+\b"  # fallback — matches any word
 
-    # Already a regex — contains regex special syntax, pass through
-    if any(c in raw for c in [r"\b", ".{", "(?", "(?i", "(?s"]):
+    # Already a regex — contains regex syntax, pass through unchanged
+    if r"\b" in raw or ".{" in raw or "(?i" in raw or "(?s" in raw:
         return raw
 
     # OR operator — split on |
@@ -776,7 +779,6 @@ def _regex_from_readable(raw: str) -> str:
     # AND proximity operator — split on +
     if "+" in raw:
         parts = [p.strip() for p in raw.split("+") if p.strip()]
-        # Each part becomes a word-boundary match, joined with up to 60 chars between
         compiled_parts = []
         for p in parts:
             words = p.strip().strip('"').split()
@@ -789,10 +791,12 @@ def _regex_from_readable(raw: str) -> str:
         words  = phrase.split()
         return r"\b" + r"\s+".join(re.escape(w) for w in words) + r"\b"
 
-    # Plain phrase — wrap whole phrase in word boundaries
+    # Plain phrase — every word is matched as a whole word
+    # Handles multi-word phrases like "not found", "wrong price", "push to SAP"
     words = raw.split()
     if len(words) == 1:
         return r"\b" + re.escape(words[0]) + r"\b"
+    # For multi-word: allow flexible whitespace between words
     return r"\b" + r"\s+".join(re.escape(w) for w in words) + r"\b"
 
 
