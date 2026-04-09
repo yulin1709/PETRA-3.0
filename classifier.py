@@ -1062,9 +1062,11 @@ def pick_category(score_map: Dict[str, int]) -> str:
     if max_s <= 0:
         return "Others"
     cands = [c for c, s in score_map.items() if s == max_s]
+    # Check PRIORITY list first (covers hardcoded categories)
     for c in PRIORITY:
         if c in cands:
             return c
+    # Excel-only categories not in PRIORITY — still works, first candidate wins
     return cands[0]
 
 def build_reason(cat: str, cues: List[str], text_lc: str) -> str:
