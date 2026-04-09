@@ -732,68 +732,181 @@ PATTERNS: Dict[str, List[Tuple[str, int, str]]] = {
 # ============================================================
 # EXCEL-DRIVEN KEYWORD MANAGEMENT
 # ============================================================
-# Non-technical users can edit Classifier_Keywords.xlsx to add,
-# remove, or adjust keywords and scores — no code changes needed.
+# Non-technical users edit Classifier_Keywords.xlsx — no code needed.
 #
-# Columns in the Excel file:
-#   Category    — the issue category name (must match exactly)
-#   Pattern     — the regex pattern string (what to search for)
-#   Score       — integer point value (higher = stronger match)
-#   Description — plain-English label for what this rule does
-#   Enabled     — YES or NO (set NO to disable a rule without deleting it)
+# Pattern column uses plain readable phrases:
 #
-# If the file does not exist, it is created automatically from the
-# hardcoded patterns above on the first run.
+#   Single phrase     →  wrong price
+#   Either/or (|)     →  wrong price | incorrect price
+#   Both words (+)    →  wrong + price        (both must appear near each other)
+#   Exact phrase      →  "strike price"       (quote for exact multi-word match)
+#
+# Score guide:  12-15 = very strong match
+#               9-11  = strong match
+#               6-8   = medium hint
+#               1-5   = weak hint
+#
+# Enabled: YES to use the rule, NO to disable without deleting.
 # ============================================================
 
 KEYWORDS_FILE = OUT_DIR / "Classifier_Keywords.xlsx"
 
 
+def _regex_from_readable(raw: str) -> str:
+    """
+    Convert a plain-English pattern phrase into a regex string.
+
+    Supported formats (case-insensitive, all converted to regex):
+      wrong price              → \bwrong\s+price\b
+      wrong price | bad price  → (\bwrong\s+price\b|\bbad\s+price\b)
+      wrong + price            → \bwrong\b.{0,60}\bprice\b  (proximity AND)
+      "strike price"           → \bstrike\s+price\b  (exact phrase)
+    """
+    raw = raw.strip()
+
+    # Already a regex — contains regex special syntax, pass through
+    if any(c in raw for c in [r"\b", ".{", "(?", "(?i", "(?s"]):
+        return raw
+
+    # OR operator — split on |
+    if "|" in raw:
+        parts = [p.strip() for p in raw.split("|") if p.strip()]
+        return "(" + "|".join(_regex_from_readable(p) for p in parts) + ")"
+
+    # AND proximity operator — split on +
+    if "+" in raw:
+        parts = [p.strip() for p in raw.split("+") if p.strip()]
+        # Each part becomes a word-boundary match, joined with up to 60 chars between
+        compiled_parts = []
+        for p in parts:
+            words = p.strip().strip('"').split()
+            compiled_parts.append(r"\b" + r"\s+".join(re.escape(w) for w in words) + r"\b")
+        return r".{0,60}".join(compiled_parts)
+
+    # Exact phrase in quotes
+    if raw.startswith('"') and raw.endswith('"'):
+        phrase = raw[1:-1].strip()
+        words  = phrase.split()
+        return r"\b" + r"\s+".join(re.escape(w) for w in words) + r"\b"
+
+    # Plain phrase — wrap whole phrase in word boundaries
+    words = raw.split()
+    if len(words) == 1:
+        return r"\b" + re.escape(words[0]) + r"\b"
+    return r"\b" + r"\s+".join(re.escape(w) for w in words) + r"\b"
+
+
+def _readable_from_regex(pat: str, desc: str) -> str:
+    """
+    Convert a regex pattern to a readable phrase for the Excel export.
+    Uses the description as the readable label — much cleaner than raw regex.
+    Falls back to a simplified version of the pattern if no description.
+    """
+    if desc and desc.strip():
+        return desc.strip()
+    # Strip common regex noise for a rough readable version
+    readable = pat
+    readable = re.sub(r"\\b", "", readable)
+    readable = re.sub(r"\\.{0,\d+}\\b", " ... ", readable)
+    readable = re.sub(r"\(\?[is]+\)", "", readable)
+    readable = re.sub(r"\\s\*", " ", readable)
+    readable = re.sub(r"\\s\+", " ", readable)
+    readable = re.sub(r"\(([^|()]{1,30})\)", r"\1", readable)
+    readable = re.sub(r"\s+", " ", readable).strip()
+    return readable[:80]
+
+
 def export_keywords_to_excel(path: Path, patterns: dict, cats: list) -> None:
-    """Write the current hardcoded patterns to Excel so users can edit them."""
+    """
+    Write all patterns to Excel using plain readable phrases.
+    The Description column becomes the Pattern column — human-readable.
+    """
     rows = []
     for cat in cats:
         if cat == "Others":
             continue
         for pat_str, score, desc in patterns.get(cat, []):
+            readable = _readable_from_regex(pat_str, desc)
             rows.append({
                 "Category":    cat,
-                "Pattern":     pat_str,
+                "Pattern":     readable,
                 "Score":       score,
                 "Description": desc,
                 "Enabled":     "YES",
             })
+
     df_kw = pd.DataFrame(rows, columns=["Category", "Pattern", "Score", "Description", "Enabled"])
 
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         df_kw.to_excel(writer, sheet_name="Keywords", index=False)
-        # Add an Instructions sheet so users know what to do
+
+        # Format the Keywords sheet
+        from openpyxl.styles import PatternFill, Font, Alignment
+        wb  = writer.book
+        ws  = writer.sheets["Keywords"]
+        hdr_fill = PatternFill("solid", fgColor="0D1B2A")
+        hdr_font = Font(color="FFFFFF", bold=True, name="Calibri", size=10)
+        for cell in ws[1]:
+            cell.fill = hdr_fill
+            cell.font = hdr_font
+            cell.alignment = Alignment(horizontal="center")
+        ws.column_dimensions["A"].width = 35   # Category
+        ws.column_dimensions["B"].width = 45   # Pattern
+        ws.column_dimensions["C"].width = 8    # Score
+        ws.column_dimensions["D"].width = 40   # Description
+        ws.column_dimensions["E"].width = 10   # Enabled
+        ws.freeze_panes = "A2"
+
+        # Instructions sheet
         instructions = pd.DataFrame({
-            "Column": ["Category", "Pattern", "Score", "Description", "Enabled"],
-            "What it means": [
-                "The issue category this rule belongs to. Must match exactly.",
-                "The text pattern to search for in ticket descriptions. Use plain words — the system handles matching automatically.",
-                "How many points this rule adds. Use 10-15 for strong matches, 6-9 for medium, 1-5 for weak hints.",
-                "A plain-English label describing what this rule does. For your reference only — does not affect matching.",
-                "Set to YES to use this rule, NO to disable it without deleting the row.",
-            ]
+            "Column": [
+                "Category", "Pattern", "Score", "Description", "Enabled",
+                "", "HOW TO WRITE PATTERNS", "",
+                "Example", "What it does",
+            ],
+            "Explanation": [
+                "The issue category. Must match exactly (e.g. Wrong Price).",
+                "Plain words to search for in ticket descriptions. See examples below.",
+                "Points added when this rule matches. 12-15 = strong, 9-11 = medium, 6-8 = weak.",
+                "Your own label for this rule. Does not affect matching — just for reference.",
+                "YES = active. NO = disabled (rule is ignored but not deleted).",
+                "", "", "",
+                "wrong price",               "Matches tickets containing the words 'wrong price'",
+            ],
         })
         instructions.to_excel(writer, sheet_name="Instructions", index=False)
 
+        ws2 = writer.sheets["Instructions"]
+        # Add more example rows manually
+        examples = [
+            ("wrong price | incorrect price",  "Matches 'wrong price' OR 'incorrect price'"),
+            ("wrong + price",                  "Matches tickets where 'wrong' AND 'price' both appear (within 60 chars)"),
+            ('"strike price"',                 "Matches the exact phrase 'strike price'"),
+            ("push + NE",                      "Matches tickets where 'push' AND 'NE' both appear near each other"),
+            ("",                               ""),
+            ("TIPS", ""),
+            ("Use | to match multiple phrases for the same rule",  ""),
+            ("Use + when two words must both appear but not necessarily next to each other", ""),
+            ("Higher score = wins when two categories tie",        ""),
+            ("Set Enabled = NO to test removing a rule safely",    ""),
+        ]
+        start_row = len(instructions) + 3
+        for i, (ex, expl) in enumerate(examples):
+            ws2.cell(row=start_row + i, column=1, value=ex)
+            ws2.cell(row=start_row + i, column=2, value=expl)
+
+        ws2.column_dimensions["A"].width = 50
+        ws2.column_dimensions["B"].width = 60
+
     print(f"  ✅ Keywords file created → {path}")
-    print(f"     Edit this file to add/change/disable keywords. No code changes needed.")
+    print(f"     Open Classifier_Keywords.xlsx to add/edit/disable keyword rules.")
+    print(f"     No code changes needed — just edit and save the Excel file.")
 
 
-def load_patterns_from_excel(path: Path) -> tuple[dict, list] | None:
+def load_patterns_from_excel(path: Path) -> "tuple[dict, list] | None":
     """
     Load PATTERNS and CATS from the keywords Excel file.
-    Returns (patterns_dict, cats_list) or None if the file cannot be read.
-
-    Pattern column supports two formats:
-      1. Plain words  — e.g. 'wrong price'
-         The system wraps these in word-boundary regex automatically.
-      2. Regex string — e.g. r'\bwrong\b.{0,40}\bprice\b'
-         Used as-is. Useful for advanced users who want precise control.
+    Pattern column is plain readable text — converted to regex internally.
     """
     try:
         df_kw = pd.read_excel(path, sheet_name="Keywords", engine="openpyxl")
@@ -806,37 +919,40 @@ def load_patterns_from_excel(path: Path) -> tuple[dict, list] | None:
         print(f"  [WARN] Keywords file missing required columns {required} — using built-in patterns.")
         return None
 
-    # Filter to enabled rows only
     if "Enabled" in df_kw.columns:
         df_kw = df_kw[df_kw["Enabled"].astype(str).str.upper().str.strip() != "NO"].copy()
 
     df_kw = df_kw.dropna(subset=["Category", "Pattern", "Score"])
-    df_kw["Score"]    = pd.to_numeric(df_kw["Score"], errors="coerce").fillna(8).astype(int)
-    df_kw["Category"] = df_kw["Category"].astype(str).str.strip()
-    df_kw["Pattern"]  = df_kw["Pattern"].astype(str).str.strip()
-    df_kw["Description"] = df_kw.get("Description", pd.Series("", index=df_kw.index)).fillna("").astype(str)
+    df_kw["Score"]       = pd.to_numeric(df_kw["Score"], errors="coerce").fillna(8).astype(int)
+    df_kw["Category"]    = df_kw["Category"].astype(str).str.strip()
+    df_kw["Pattern"]     = df_kw["Pattern"].astype(str).str.strip()
+    df_kw["Description"] = df_kw["Description"].fillna("").astype(str) if "Description" in df_kw.columns else ""
 
     patterns_out: Dict[str, List[Tuple[str, int, str]]] = {}
     cats_out: list = []
+    bad_patterns = 0
 
     for cat, grp in df_kw.groupby("Category", sort=False):
         if cat not in cats_out:
             cats_out.append(cat)
         rules = []
         for _, row in grp.iterrows():
-            raw = row["Pattern"]
-            # If it looks like a plain phrase (no regex special chars), wrap it
-            if not any(c in raw for c in r"\.^$*+?{}[]|()\b"):
-                # Plain words — wrap each word with \b and join with flexible spacing
-                words = raw.strip().split()
-                pat = r"\b" + r"\s+".join(re.escape(w) for w in words) + r"\b"
-            else:
-                pat = raw  # already a regex
-            rules.append((pat, int(row["Score"]), str(row["Description"])))
+            readable = str(row["Pattern"]).strip()
+            desc     = str(row["Description"]).strip()
+            try:
+                regex = _regex_from_readable(readable)
+                re.compile(regex, re.IGNORECASE)  # validate
+                rules.append((regex, int(row["Score"]), desc or readable))
+            except re.error as e:
+                bad_patterns += 1
+                print(f"  [WARN] Skipping invalid pattern in '{cat}': '{readable}' → {e}")
         patterns_out[cat] = rules
 
     if "Others" not in cats_out:
         cats_out.append("Others")
+
+    if bad_patterns:
+        print(f"  [WARN] {bad_patterns} pattern(s) skipped due to errors.")
 
     print(f"  📋 Loaded {len(df_kw):,} keyword rules from {path.name} "
           f"({len(cats_out)-1} categories)")
@@ -852,7 +968,6 @@ if KEYWORDS_FILE.exists():
     else:
         print("  ⚠️  Falling back to built-in patterns.")
 else:
-    # First run — export hardcoded patterns to Excel so users can start editing
     print(f"  📝 Keywords file not found — creating it from built-in patterns...")
     export_keywords_to_excel(KEYWORDS_FILE, PATTERNS, CATS)
     print("  ✅ Using built-in patterns for this run.")
