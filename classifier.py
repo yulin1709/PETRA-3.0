@@ -729,6 +729,135 @@ PATTERNS: Dict[str, List[Tuple[str, int, str]]] = {
     ],
 }
 
+# ============================================================
+# EXCEL-DRIVEN KEYWORD MANAGEMENT
+# ============================================================
+# Non-technical users can edit Classifier_Keywords.xlsx to add,
+# remove, or adjust keywords and scores — no code changes needed.
+#
+# Columns in the Excel file:
+#   Category    — the issue category name (must match exactly)
+#   Pattern     — the regex pattern string (what to search for)
+#   Score       — integer point value (higher = stronger match)
+#   Description — plain-English label for what this rule does
+#   Enabled     — YES or NO (set NO to disable a rule without deleting it)
+#
+# If the file does not exist, it is created automatically from the
+# hardcoded patterns above on the first run.
+# ============================================================
+
+KEYWORDS_FILE = OUT_DIR / "Classifier_Keywords.xlsx"
+
+
+def export_keywords_to_excel(path: Path, patterns: dict, cats: list) -> None:
+    """Write the current hardcoded patterns to Excel so users can edit them."""
+    rows = []
+    for cat in cats:
+        if cat == "Others":
+            continue
+        for pat_str, score, desc in patterns.get(cat, []):
+            rows.append({
+                "Category":    cat,
+                "Pattern":     pat_str,
+                "Score":       score,
+                "Description": desc,
+                "Enabled":     "YES",
+            })
+    df_kw = pd.DataFrame(rows, columns=["Category", "Pattern", "Score", "Description", "Enabled"])
+
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        df_kw.to_excel(writer, sheet_name="Keywords", index=False)
+        # Add an Instructions sheet so users know what to do
+        instructions = pd.DataFrame({
+            "Column": ["Category", "Pattern", "Score", "Description", "Enabled"],
+            "What it means": [
+                "The issue category this rule belongs to. Must match exactly.",
+                "The text pattern to search for in ticket descriptions. Use plain words — the system handles matching automatically.",
+                "How many points this rule adds. Use 10-15 for strong matches, 6-9 for medium, 1-5 for weak hints.",
+                "A plain-English label describing what this rule does. For your reference only — does not affect matching.",
+                "Set to YES to use this rule, NO to disable it without deleting the row.",
+            ]
+        })
+        instructions.to_excel(writer, sheet_name="Instructions", index=False)
+
+    print(f"  ✅ Keywords file created → {path}")
+    print(f"     Edit this file to add/change/disable keywords. No code changes needed.")
+
+
+def load_patterns_from_excel(path: Path) -> tuple[dict, list] | None:
+    """
+    Load PATTERNS and CATS from the keywords Excel file.
+    Returns (patterns_dict, cats_list) or None if the file cannot be read.
+
+    Pattern column supports two formats:
+      1. Plain words  — e.g. 'wrong price'
+         The system wraps these in word-boundary regex automatically.
+      2. Regex string — e.g. r'\bwrong\b.{0,40}\bprice\b'
+         Used as-is. Useful for advanced users who want precise control.
+    """
+    try:
+        df_kw = pd.read_excel(path, sheet_name="Keywords", engine="openpyxl")
+    except Exception as e:
+        print(f"  [WARN] Could not read keywords file: {e}")
+        return None
+
+    required = {"Category", "Pattern", "Score"}
+    if not required.issubset(set(df_kw.columns)):
+        print(f"  [WARN] Keywords file missing required columns {required} — using built-in patterns.")
+        return None
+
+    # Filter to enabled rows only
+    if "Enabled" in df_kw.columns:
+        df_kw = df_kw[df_kw["Enabled"].astype(str).str.upper().str.strip() != "NO"].copy()
+
+    df_kw = df_kw.dropna(subset=["Category", "Pattern", "Score"])
+    df_kw["Score"]    = pd.to_numeric(df_kw["Score"], errors="coerce").fillna(8).astype(int)
+    df_kw["Category"] = df_kw["Category"].astype(str).str.strip()
+    df_kw["Pattern"]  = df_kw["Pattern"].astype(str).str.strip()
+    df_kw["Description"] = df_kw.get("Description", pd.Series("", index=df_kw.index)).fillna("").astype(str)
+
+    patterns_out: Dict[str, List[Tuple[str, int, str]]] = {}
+    cats_out: list = []
+
+    for cat, grp in df_kw.groupby("Category", sort=False):
+        if cat not in cats_out:
+            cats_out.append(cat)
+        rules = []
+        for _, row in grp.iterrows():
+            raw = row["Pattern"]
+            # If it looks like a plain phrase (no regex special chars), wrap it
+            if not any(c in raw for c in r"\.^$*+?{}[]|()\b"):
+                # Plain words — wrap each word with \b and join with flexible spacing
+                words = raw.strip().split()
+                pat = r"\b" + r"\s+".join(re.escape(w) for w in words) + r"\b"
+            else:
+                pat = raw  # already a regex
+            rules.append((pat, int(row["Score"]), str(row["Description"])))
+        patterns_out[cat] = rules
+
+    if "Others" not in cats_out:
+        cats_out.append("Others")
+
+    print(f"  📋 Loaded {len(df_kw):,} keyword rules from {path.name} "
+          f"({len(cats_out)-1} categories)")
+    return patterns_out, cats_out
+
+
+# ── Load from Excel if available, otherwise use hardcoded patterns ──
+if KEYWORDS_FILE.exists():
+    _excel_result = load_patterns_from_excel(KEYWORDS_FILE)
+    if _excel_result is not None:
+        PATTERNS, CATS = _excel_result
+        print("  ✅ Using Excel-driven keyword patterns.")
+    else:
+        print("  ⚠️  Falling back to built-in patterns.")
+else:
+    # First run — export hardcoded patterns to Excel so users can start editing
+    print(f"  📝 Keywords file not found — creating it from built-in patterns...")
+    export_keywords_to_excel(KEYWORDS_FILE, PATTERNS, CATS)
+    print("  ✅ Using built-in patterns for this run.")
+
+
 # ── Pre-compile all patterns once at startup ──────────────────────
 COMPILED: Dict[str, List[Tuple[re.Pattern, int, str]]] = {
     cat: [(re.compile(p, re.IGNORECASE), w, cue) for p, w, cue in plist]
